@@ -12,6 +12,19 @@ import 'dotenv/config';
 const app = new Hono();
 app.use('/api/*', cors());
 
+// Ruta de bienvenida para verificar que la API funciona
+app.get("/", (c) => {
+  return c.json({
+    status: "online",
+    message: "Godot Course API is running",
+    version: "1.0.0",
+    endpoints: {
+      auth_google: "/api/auth/google",
+      course_data: "/api/course/:userId"
+    }
+  });
+});
+
 // Configuración de OAuth
 const callbackUrl = process.env.BACKEND_URL 
   ? `${process.env.BACKEND_URL}/api/auth/callback/google` 
