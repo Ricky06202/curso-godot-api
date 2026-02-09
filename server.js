@@ -12,12 +12,37 @@ import 'dotenv/config';
 const app = new Hono();
 app.use('/api/*', cors());
 
+// Almacenar errores de inicialización para verlos en el navegador
+let initError = null;
+
+// Manejador de errores global para evitar 503 genéricos
+app.onError((err, c) => {
+  console.error(`🔥 Error en la petición: ${err.message}`);
+  return c.json({
+    error: "Error interno del servidor",
+    message: err.message,
+    stack: process.env.NODE_ENV === 'production' ? null : err.stack
+  }, 500);
+});
+
+// Log de inicio para depuración en producción
+console.log("--- DEBUG INFO ---");
+console.log("NODE_ENV:", process.env.NODE_ENV);
+console.log("DATABASE_URL configurada:", process.env.DATABASE_URL ? "SÍ" : "NO");
+console.log("BACKEND_URL:", process.env.BACKEND_URL);
+console.log("------------------");
+
 // Ruta de bienvenida para verificar que la API funciona
 app.get("/", (c) => {
   return c.json({
-    status: "online",
-    message: "Godot Course API is running",
-    version: "1.0.0",
+    status: db ? "online" : "error",
+    message: "Godot Course API Status",
+    init_error: initError,
+    config: {
+      DATABASE_URL_SET: !!process.env.DATABASE_URL,
+      NODE_ENV: process.env.NODE_ENV || "not set",
+      BACKEND_URL: process.env.BACKEND_URL || "not set"
+    },
     endpoints: {
       auth_google: "/api/auth/google",
       course_data: "/api/course/:userId"
@@ -36,11 +61,36 @@ const google = new Google(
   callbackUrl
 );
 
-// Conexión a MySQL
-const connection = await mysql.createConnection(process.env.DATABASE_URL);
-const db = drizzle(connection, { schema, mode: 'default' });
+// Conexión a MySQL con Pool (más estable para producción)
+let db;
+try {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("La variable DATABASE_URL no está definida en el entorno.");
+  }
+  const poolConnection = mysql.createPool(process.env.DATABASE_URL);
+  db = drizzle(poolConnection, { schema, mode: 'default' });
+  console.log("✅ Pool de conexiones MySQL configurado");
+} catch (error) {
+  initError = {
+    step: "Database Initialization",
+    message: error.message,
+    code: error.code || "N/A"
+  };
+  console.error("❌ Error configurando la base de datos:", error);
+}
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:4321";
+
+// Middleware para verificar DB en cada petición (excepto la raíz y auth)
+app.use('/api/*', async (c, next) => {
+  if (!db) {
+    return c.json({ 
+      error: "Base de datos no disponible", 
+      details: "El pool de conexiones no se pudo inicializar. Revisa la variable DATABASE_URL." 
+    }, 503);
+  }
+  await next();
+});
 
 // --- RUTAS DE AUTENTICACIÓN ---
 
@@ -126,6 +176,15 @@ app.post('/api/complete', async (c) => {
 });
 
 const port = process.env.PORT || 3000;
-console.log(`🚀 Servidor Godot 4.6 activo en http://localhost:${port}`);
 
-serve({ fetch: app.fetch, port: Number(port) });
+try {
+  console.log(`🚀 Iniciando servidor en puerto ${port}...`);
+  serve({ 
+    fetch: app.fetch, 
+    port: Number(port) 
+  }, (info) => {
+    console.log(`✅ Servidor escuchando en http://localhost:${info.port}`);
+  });
+} catch (error) {
+  console.error("❌ Error fatal al iniciar el servidor:", error);
+}
