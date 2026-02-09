@@ -56,6 +56,10 @@ const callbackUrlGoogle = process.env.BACKEND_URL
   ? `${process.env.BACKEND_URL}/api/auth/callback/google` 
   : "http://localhost:3000/api/auth/callback/google";
 
+const callbackUrlGithub = process.env.BACKEND_URL 
+  ? `${process.env.BACKEND_URL}/api/auth/callback/github` 
+  : "http://localhost:3000/api/auth/callback/github";
+
 const google = new Google(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -64,7 +68,8 @@ const google = new Google(
 
 const github = new GitHub(
   process.env.GITHUB_CLIENT_ID,
-  process.env.GITHUB_CLIENT_SECRET
+  process.env.GITHUB_CLIENT_SECRET,
+  callbackUrlGithub
 );
 
 // Conexión a MySQL con Pool (más estable para producción)
@@ -103,7 +108,7 @@ app.use('/api/*', async (c, next) => {
 // GITHUB
 app.get("/api/auth/github", async (c) => {
   const state = Math.random().toString(36).substring(2);
-  const url = await github.createAuthorizationURL(state);
+  const url = github.createAuthorizationURL(state, ["user:email"]);
   
   setCookie(c, "github_oauth_state", state, { 
     httpOnly: true, 
@@ -165,9 +170,7 @@ app.get("/api/auth/google", async (c) => {
   const state = Math.random().toString(36).substring(2);
   const codeVerifier = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
   
-  const url = await google.createAuthorizationURL(state, codeVerifier, {
-    scopes: ["profile", "email"]
-  });
+  const url = google.createAuthorizationURL(state, codeVerifier, ["openid", "profile", "email"]);
   
   setCookie(c, "google_oauth_state", state, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 10 });
   setCookie(c, "google_code_verifier", codeVerifier, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 10 });
