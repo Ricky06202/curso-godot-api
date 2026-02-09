@@ -3,10 +3,10 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { setCookie, getCookie } from 'hono/cookie';
 import { drizzle } from 'drizzle-orm/mysql2';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import mysql from 'mysql2/promise';
 import * as schema from './db/schema.js';
-import { Google } from "arctic";
+import { Google, GitHub } from "arctic";
 import 'dotenv/config';
 
 const app = new Hono();
@@ -45,20 +45,26 @@ app.get("/", (c) => {
     },
     endpoints: {
       auth_google: "/api/auth/google",
+      auth_github: "/api/auth/github",
       course_data: "/api/course/:userId"
     }
   });
 });
 
 // Configuración de OAuth
-const callbackUrl = process.env.BACKEND_URL 
+const callbackUrlGoogle = process.env.BACKEND_URL 
   ? `${process.env.BACKEND_URL}/api/auth/callback/google` 
   : "http://localhost:3000/api/auth/callback/google";
 
 const google = new Google(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  callbackUrl
+  callbackUrlGoogle
+);
+
+const github = new GitHub(
+  process.env.GITHUB_CLIENT_ID,
+  process.env.GITHUB_CLIENT_SECRET
 );
 
 // Conexión a MySQL con Pool (más estable para producción)
@@ -71,10 +77,10 @@ try {
   db = drizzle(poolConnection, { schema, mode: 'default' });
   console.log("✅ Pool de conexiones MySQL configurado");
 } catch (error) {
-  initError = {
-    step: "Database Initialization",
-    message: error.message,
-    code: error.code || "N/A"
+  initError = { 
+    step: "Database Initialization", 
+    message: error.message, 
+    code: error.code || "N/A" 
   };
   console.error("❌ Error configurando la base de datos:", error);
 }
@@ -93,6 +99,66 @@ app.use('/api/*', async (c, next) => {
 });
 
 // --- RUTAS DE AUTENTICACIÓN ---
+
+// GITHUB
+app.get("/api/auth/github", async (c) => {
+  const state = Math.random().toString(36).substring(2);
+  const url = await github.createAuthorizationURL(state);
+  
+  setCookie(c, "github_oauth_state", state, { 
+    httpOnly: true, 
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 10
+  });
+  
+  return c.redirect(url.toString());
+});
+
+app.get("/api/auth/callback/github", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+  const storedState = getCookie(c, "github_oauth_state");
+
+  if (!code || !state || state !== storedState) {
+    return c.text("Error de validación de estado", 400);
+  }
+
+  try {
+    const tokens = await github.validateAuthorizationCode(code);
+    const githubUserResponse = await fetch("https://api.github.com/user", {
+      headers: { Authorization: `Bearer ${tokens.accessToken()}` }
+    });
+    const githubUser = await githubUserResponse.json();
+
+    // Buscar si ya existe el usuario por githubId o por email
+    let user = await db.select().from(schema.users).where(
+      or(
+        eq(schema.users.githubId, githubUser.id),
+        eq(schema.users.email, githubUser.email)
+      )
+    );
+
+    if (user.length === 0) {
+      await db.insert(schema.users).values({
+        username: githubUser.login,
+        email: githubUser.email,
+        githubId: githubUser.id,
+        avatarUrl: githubUser.avatar_url
+      });
+    } else if (!user[0].githubId) {
+      // Si existía por email (de Google), vinculamos la cuenta de GitHub
+      await db.update(schema.users)
+        .set({ githubId: githubUser.id, avatarUrl: githubUser.avatar_url })
+        .where(eq(schema.users.email, githubUser.email));
+    }
+
+    return c.redirect(`${FRONTEND_URL}/dashboard`);
+  } catch (error) {
+    console.error(error);
+    return c.text("Error durante la autenticación con GitHub", 500);
+  }
+});
 
 // GOOGLE
 app.get("/api/auth/google", async (c) => {
@@ -127,7 +193,10 @@ app.get("/api/auth/callback/google", async (c) => {
     const googleUser = await googleUserResponse.json();
 
     let user = await db.select().from(schema.users).where(
-      eq(schema.users.googleId, googleUser.sub)
+      or(
+        eq(schema.users.googleId, googleUser.sub),
+        eq(schema.users.email, googleUser.email)
+      )
     );
 
     if (user.length === 0) {
@@ -137,6 +206,11 @@ app.get("/api/auth/callback/google", async (c) => {
         googleId: googleUser.sub,
         avatarUrl: googleUser.picture
       });
+    } else if (!user[0].googleId) {
+      // Si el usuario existía por email (de GitHub), vinculamos la cuenta de Google
+      await db.update(schema.users)
+        .set({ googleId: googleUser.sub, avatarUrl: googleUser.picture })
+        .where(eq(schema.users.email, googleUser.email));
     }
 
     return c.redirect(`${FRONTEND_URL}/dashboard`);

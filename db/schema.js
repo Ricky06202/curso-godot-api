@@ -4,6 +4,7 @@ export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
   username: varchar('username', { length: 255 }).notNull(),
   email: varchar('email', { length: 255 }),
+  githubId: int('github_id').unique(),
   googleId: varchar('google_id', { length: 255 }).unique(),
   avatarUrl: varchar('avatar_url', { length: 255 }),
 });
