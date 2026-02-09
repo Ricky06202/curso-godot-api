@@ -145,17 +145,31 @@ app.get("/api/auth/callback/github", async (c) => {
     );
 
     if (user.length === 0) {
-      await db.insert(schema.users).values({
+      const [result] = await db.insert(schema.users).values({
         username: githubUser.login,
         email: githubUser.email,
         githubId: githubUser.id,
         avatarUrl: githubUser.avatar_url
       });
-    } else if (!user[0].githubId) {
-      // Si existía por email (de Google), vinculamos la cuenta de GitHub
-      await db.update(schema.users)
-        .set({ githubId: githubUser.id, avatarUrl: githubUser.avatar_url })
-        .where(eq(schema.users.email, githubUser.email));
+      setCookie(c, "user_id", result.insertId.toString(), {
+        httpOnly: false, // Permitir que el frontend lo lea si es necesario
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7 // 1 semana
+      });
+    } else {
+      if (!user[0].githubId) {
+        // Si existía por email (de Google), vinculamos la cuenta de GitHub
+        await db.update(schema.users)
+          .set({ githubId: githubUser.id, avatarUrl: githubUser.avatar_url })
+          .where(eq(schema.users.email, githubUser.email));
+      }
+      setCookie(c, "user_id", user[0].id.toString(), {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7
+      });
     }
 
     return c.redirect(`${FRONTEND_URL}/dashboard`);
@@ -203,17 +217,31 @@ app.get("/api/auth/callback/google", async (c) => {
     );
 
     if (user.length === 0) {
-      await db.insert(schema.users).values({
+      const [result] = await db.insert(schema.users).values({
         username: googleUser.name,
         email: googleUser.email,
         googleId: googleUser.sub,
         avatarUrl: googleUser.picture
       });
-    } else if (!user[0].googleId) {
-      // Si el usuario existía por email (de GitHub), vinculamos la cuenta de Google
-      await db.update(schema.users)
-        .set({ googleId: googleUser.sub, avatarUrl: googleUser.picture })
-        .where(eq(schema.users.email, googleUser.email));
+      setCookie(c, "user_id", result.insertId.toString(), {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7
+      });
+    } else {
+      if (!user[0].googleId) {
+        // Si el usuario existía por email (de GitHub), vinculamos la cuenta de Google
+        await db.update(schema.users)
+          .set({ googleId: googleUser.sub, avatarUrl: googleUser.picture })
+          .where(eq(schema.users.email, googleUser.email));
+      }
+      setCookie(c, "user_id", user[0].id.toString(), {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7
+      });
     }
 
     return c.redirect(`${FRONTEND_URL}/dashboard`);
@@ -221,6 +249,15 @@ app.get("/api/auth/callback/google", async (c) => {
     console.error(error);
     return c.text("Error durante la autenticación con Google", 500);
   }
+});
+
+// LOGOUT
+app.get("/api/auth/logout", (c) => {
+  setCookie(c, "user_id", "", {
+    path: "/",
+    maxAge: 0 // Expira inmediatamente
+  });
+  return c.redirect(FRONTEND_URL);
 });
 
 // --- ENDPOINTS DE LA API ---
