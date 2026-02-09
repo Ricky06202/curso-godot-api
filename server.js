@@ -13,15 +13,21 @@ const app = new Hono();
 app.use('/api/*', cors());
 
 // Configuración de OAuth
+const callbackUrl = process.env.BACKEND_URL 
+  ? `${process.env.BACKEND_URL}/api/auth/callback/google` 
+  : "http://localhost:3000/api/auth/callback/google";
+
 const google = new Google(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  "http://localhost:3000/api/auth/callback/google" // Cambiar en producción.
+  callbackUrl
 );
 
 // Conexión a MySQL
 const connection = await mysql.createConnection(process.env.DATABASE_URL);
 const db = drizzle(connection, { schema, mode: 'default' });
+
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:4321";
 
 // --- RUTAS DE AUTENTICACIÓN ---
 
@@ -70,7 +76,7 @@ app.get("/api/auth/callback/google", async (c) => {
       });
     }
 
-    return c.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+    return c.redirect(`${FRONTEND_URL}/dashboard`);
   } catch (error) {
     console.error(error);
     return c.text("Error durante la autenticación con Google", 500);
