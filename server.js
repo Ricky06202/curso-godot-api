@@ -46,7 +46,15 @@ app.get("/", (c) => {
     endpoints: {
       auth_google: "/api/auth/google",
       auth_github: "/api/auth/github",
-      course_data: "/api/course/:userId"
+      auth_logout: "/api/auth/logout",
+      users: "/api/users",
+      user_progress: "/api/users/:id/progress",
+      stats: "/api/stats/global",
+      config: "/api/config (GET, PUT)",
+      reorder_lessons: "/api/lessons/reorder (PUT)",
+      course_data: "/api/course/:userId",
+      lessons_crud: "/api/lessons (GET, POST, PUT, DELETE)",
+      resources: "/api/lessons/:id/resources (GET, POST, DELETE)"
     }
   });
 });
@@ -287,6 +295,161 @@ app.post('/api/complete', async (c) => {
   });
 
   return c.json({ success: true, message: '¡Progreso de Godot guardado!' });
+});
+
+// --- CRUD DE LECCIONES ---
+
+// Crear lección
+app.post('/api/lessons', async (c) => {
+  const { title, videoUrl, order } = await c.req.json();
+  
+  const [result] = await db.insert(schema.lessons).values({
+    title,
+    videoUrl,
+    order: order || 0
+  });
+
+  return c.json({ 
+    success: true, 
+    message: 'Lección creada', 
+    id: result.insertId 
+  }, 201);
+});
+
+// Editar lección
+app.put('/api/lessons/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const { title, videoUrl, order } = await c.req.json();
+  
+  await db.update(schema.lessons)
+    .set({ title, videoUrl, order })
+    .where(eq(schema.lessons.id, id));
+
+  return c.json({ success: true, message: 'Lección actualizada' });
+});
+
+// Eliminar lección
+app.delete('/api/lessons/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  
+  await db.delete(schema.lessons)
+    .where(eq(schema.lessons.id, id));
+
+  return c.json({ success: true, message: 'Lección eliminada' });
+});
+
+// --- USUARIOS ---
+
+// Obtener todos los usuarios
+app.get('/api/users', async (c) => {
+  const allUsers = await db.select().from(schema.users);
+  return c.json(allUsers);
+});
+
+// Obtener progreso detallado de un usuario
+app.get('/api/users/:id/progress', async (c) => {
+  const userId = Number(c.req.param('id'));
+  
+  const userProgress = await db.select({
+    lessonId: schema.progress.lessonId,
+    completed: schema.progress.completed,
+    completedAt: schema.progress.completedAt,
+    lessonTitle: schema.lessons.title
+  })
+  .from(schema.progress)
+  .innerJoin(schema.lessons, eq(schema.progress.lessonId, schema.lessons.id))
+  .where(eq(schema.progress.userId, userId));
+
+  return c.json(userProgress);
+});
+
+// --- ESTADÍSTICAS ---
+
+app.get('/api/stats/global', async (c) => {
+  const allUsers = await db.select().from(schema.users);
+  const allLessons = await db.select().from(schema.lessons);
+  const allProgress = await db.select().from(schema.progress).where(eq(schema.progress.completed, true));
+
+  const totalPossibleProgress = allUsers.length * allLessons.length;
+  const actualProgress = allProgress.length;
+  
+  const completionRate = totalPossibleProgress > 0 
+    ? Math.round((actualProgress / totalPossibleProgress) * 100) 
+    : 0;
+
+  return c.json({
+    totalUsers: allUsers.length,
+    totalLessons: allLessons.length,
+    completionRate: `${completionRate}%`,
+    averageTimePerUser: "42min" // Dato simulado por ahora
+  });
+});
+
+// --- RECURSOS ---
+
+// Obtener recursos de una lección
+app.get('/api/lessons/:id/resources', async (c) => {
+  const lessonId = Number(c.req.param('id'));
+  const lessonResources = await db.select().from(schema.resources).where(eq(schema.resources.lessonId, lessonId));
+  return c.json(lessonResources);
+});
+
+// Agregar recurso a una lección
+app.post('/api/lessons/:id/resources', async (c) => {
+  const lessonId = Number(c.req.param('id'));
+  const { title, url } = await c.req.json();
+  
+  const [result] = await db.insert(schema.resources).values({
+    lessonId,
+    title,
+    url
+  });
+
+  return c.json({ success: true, id: result.insertId }, 201);
+});
+
+// Eliminar recurso
+app.delete('/api/resources/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  await db.delete(schema.resources).where(eq(schema.resources.id, id));
+  return c.json({ success: true });
+});
+
+// --- CONFIGURACIÓN ---
+
+app.get('/api/config', async (c) => {
+  const allConfig = await db.select().from(schema.config);
+  const configMap = allConfig.reduce((acc, curr) => {
+    acc[curr.key] = curr.value;
+    return acc;
+  }, {});
+  return c.json(configMap);
+});
+
+app.put('/api/config', async (c) => {
+  const body = await c.req.json();
+  
+  for (const [key, value] of Object.entries(body)) {
+    await db.insert(schema.config)
+      .values({ key, value: String(value) })
+      .onDuplicateKeyUpdate({ set: { value: String(value) } });
+  }
+
+  return c.json({ success: true });
+});
+
+// --- REORDENAMIENTO ---
+
+app.put('/api/lessons/reorder', async (c) => {
+  const { lessons } = await c.req.json(); // Array de { id, order }
+  
+  for (const item of lessons) {
+    await db.update(schema.lessons)
+      .set({ order: item.order })
+      .where(eq(schema.lessons.id, item.id));
+  }
+
+  return c.json({ success: true });
 });
 
 const port = process.env.PORT || 3000;

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch server.js",
     "start": "tsx server.js",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:reset": "node db/reset.js && drizzle-kit push"
   },
   "devDependencies": {
     "@types/bun": "latest",

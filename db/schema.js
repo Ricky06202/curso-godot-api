@@ -1,4 +1,4 @@
-import { mysqlTable, serial, varchar, int, boolean, timestamp, primaryKey } from 'drizzle-orm/mysql-core';
+import { mysqlTable, varchar, int, boolean, timestamp, text } from 'drizzle-orm/mysql-core';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -13,7 +13,7 @@ export const lessons = mysqlTable('lessons', {
   id: int('id').autoincrement().primaryKey(),
   title: varchar('title', { length: 255 }).notNull(),
   videoUrl: varchar('video_url', { length: 255 }).notNull(),
-  order: int('order').notNull(), // Para saber qué video va primero
+  order: int('order').notNull(),
 });
 
 export const progress = mysqlTable('progress', {
@@ -22,4 +22,16 @@ export const progress = mysqlTable('progress', {
   lessonId: int('lesson_id').notNull(),
   completed: boolean('completed').default(false),
   completedAt: timestamp('completed_at').defaultNow(),
+});
+
+export const resources = mysqlTable('resources', {
+  id: int('id').autoincrement().primaryKey(),
+  lessonId: int('lesson_id').notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  url: varchar('url', { length: 255 }).notNull(),
+});
+
+export const config = mysqlTable('config', {
+  key: varchar('key', { length: 50 }).primaryKey(),
+  value: text('value').notNull(),
 });
