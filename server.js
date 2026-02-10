@@ -274,7 +274,7 @@ app.get("/api/auth/logout", (c) => {
 app.get('/api/course/:userId', async (c) => {
   const userId = c.req.param('userId');
   
-  const allLessons = await db.select().from(schema.lessons).orderBy(schema.lessons.order);
+  const allLessons = await db.select().from(schema.lessons).orderBy(asc(schema.lessons.order));
   const userProgress = await db.select()
     .from(schema.progress)
     .where(eq(schema.progress.userId, Number(userId)));
