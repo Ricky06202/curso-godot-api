@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { setCookie, getCookie } from 'hono/cookie';
 import { drizzle } from 'drizzle-orm/mysql2';
-import { eq, or } from 'drizzle-orm';
+import { eq, or, asc } from 'drizzle-orm';
 import mysql from 'mysql2/promise';
 import * as schema from './db/schema.js';
 import { Google, GitHub } from "arctic";
@@ -53,7 +53,8 @@ app.get("/", (c) => {
       config: "/api/config (GET, PUT)",
       reorder_lessons: "/api/lessons/reorder (PUT)",
       course_data: "/api/course/:userId",
-      lessons_crud: "/api/lessons (GET, POST, PUT, DELETE)",
+      lessons_list: "/api/lessons (GET)",
+      lessons_crud: "/api/lessons (POST, PUT, DELETE)",
       resources: "/api/lessons/:id/resources (GET, POST, DELETE)"
     }
   });
@@ -298,6 +299,12 @@ app.post('/api/complete', async (c) => {
 });
 
 // --- CRUD DE LECCIONES ---
+
+// Obtener todas las lecciones
+app.get('/api/lessons', async (c) => {
+  const allLessons = await db.select().from(schema.lessons).orderBy(asc(schema.lessons.order));
+  return c.json(allLessons);
+});
 
 // Crear lección
 app.post('/api/lessons', async (c) => {
