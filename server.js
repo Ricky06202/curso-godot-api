@@ -279,8 +279,17 @@ app.get('/api/course/:userId', async (c) => {
     .from(schema.progress)
     .where(eq(schema.progress.userId, Number(userId)));
 
+  // Obtener todos los códigos de lecciones
+  const allCodes = await db.select().from(schema.lessonCodes);
+
+  // Mapear lecciones para incluir sus códigos
+  const lessonsWithCodes = allLessons.map(lesson => ({
+    ...lesson,
+    codes: allCodes.filter(code => code.lessonId === lesson.id)
+  }));
+
   return c.json({
-    lessons: allLessons,
+    lessons: lessonsWithCodes,
     progress: userProgress
   });
 });
@@ -308,10 +317,11 @@ app.get('/api/lessons', async (c) => {
 
 // Crear lección
 app.post('/api/lessons', async (c) => {
-  const { title, videoUrl, order } = await c.req.json();
+  const { title, description, videoUrl, order } = await c.req.json();
   
   const [result] = await db.insert(schema.lessons).values({
     title,
+    description,
     videoUrl,
     order: order || 0
   });
@@ -326,10 +336,10 @@ app.post('/api/lessons', async (c) => {
 // Editar lección
 app.put('/api/lessons/:id', async (c) => {
   const id = Number(c.req.param('id'));
-  const { title, videoUrl, order } = await c.req.json();
+  const { title, description, videoUrl, order } = await c.req.json();
   
   await db.update(schema.lessons)
-    .set({ title, videoUrl, order })
+    .set({ title, description, videoUrl, order })
     .where(eq(schema.lessons.id, id));
 
   return c.json({ success: true, message: 'Lección actualizada' });
@@ -419,6 +429,29 @@ app.post('/api/lessons/:id/resources', async (c) => {
 app.delete('/api/resources/:id', async (c) => {
   const id = Number(c.req.param('id'));
   await db.delete(schema.resources).where(eq(schema.resources.id, id));
+  return c.json({ success: true });
+});
+
+// --- CÓDIGOS DE LECCIÓN (GDScript) ---
+
+// Agregar snippet de código a una lección
+app.post('/api/lessons/:id/codes', async (c) => {
+  const lessonId = Number(c.req.param('id'));
+  const { title, code } = await c.req.json();
+  
+  const [result] = await db.insert(schema.lessonCodes).values({
+    lessonId,
+    title,
+    code
+  });
+
+  return c.json({ success: true, id: result.insertId }, 201);
+});
+
+// Eliminar snippet de código
+app.delete('/api/codes/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  await db.delete(schema.lessonCodes).where(eq(schema.lessonCodes.id, id));
   return c.json({ success: true });
 });
 
