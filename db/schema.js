@@ -14,6 +14,7 @@ export const lessons = mysqlTable('lessons', {
   title: varchar('title', { length: 255 }).notNull(),
   description: text('description'),
   videoUrl: varchar('video_url', { length: 255 }).notNull(),
+  duration: int('duration').default(0), // Duración en segundos (para cálculos fáciles)
   order: int('order').notNull(),
 });
 

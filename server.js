@@ -346,12 +346,13 @@ app.get('/api/lessons', async (c) => {
 
 // Crear lección
 app.post('/api/lessons', async (c) => {
-  const { title, description, videoUrl, order } = await c.req.json();
+  const { title, description, videoUrl, duration, order } = await c.req.json();
   
   const [result] = await db.insert(schema.lessons).values({
     title,
     description,
     videoUrl,
+    duration,
     order: order || 0
   });
 
@@ -365,10 +366,10 @@ app.post('/api/lessons', async (c) => {
 // Editar lección
 app.put('/api/lessons/:id', async (c) => {
   const id = Number(c.req.param('id'));
-  const { title, description, videoUrl, order } = await c.req.json();
+  const { title, description, videoUrl, duration, order } = await c.req.json();
   
   await db.update(schema.lessons)
-    .set({ title, description, videoUrl, order })
+    .set({ title, description, videoUrl, duration, order })
     .where(eq(schema.lessons.id, id));
 
   return c.json({ success: true, message: 'Lección actualizada' });
