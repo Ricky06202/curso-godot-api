@@ -457,6 +457,18 @@ app.post('/api/lessons/:id/resources', async (c) => {
   return c.json({ success: true, id: result.insertId }, 201);
 });
 
+// Editar recurso
+app.put('/api/resources/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const { title, description } = await c.req.json();
+  
+  await db.update(schema.resources)
+    .set({ title, description })
+    .where(eq(schema.resources.id, id));
+
+  return c.json({ success: true, message: 'Recurso actualizado' });
+});
+
 // Eliminar recurso
 app.delete('/api/resources/:id', async (c) => {
   const id = Number(c.req.param('id'));
@@ -478,6 +490,18 @@ app.post('/api/lessons/:id/codes', async (c) => {
   });
 
   return c.json({ success: true, id: result.insertId }, 201);
+});
+
+// Editar snippet de código
+app.put('/api/codes/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const { title, code } = await c.req.json();
+  
+  await db.update(schema.lessonCodes)
+    .set({ title, code })
+    .where(eq(schema.lessonCodes.id, id));
+
+  return c.json({ success: true, message: 'Snippet actualizado' });
 });
 
 // Eliminar snippet de código
