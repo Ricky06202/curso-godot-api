@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { setCookie, getCookie } from 'hono/cookie';
 import { drizzle } from 'drizzle-orm/mysql2';
-import { eq, or, asc } from 'drizzle-orm';
+import { eq, or, asc, and } from 'drizzle-orm';
 import mysql from 'mysql2/promise';
 import * as schema from './db/schema.js';
 import { Google, GitHub } from "arctic";
@@ -294,17 +294,46 @@ app.get('/api/course/:userId', async (c) => {
   });
 });
 
-// ENDPOINT: Marcar lección como completada (5 min de video terminados)
+// ENDPOINT: Marcar/Desmarcar lección como completada
 app.post('/api/complete', async (c) => {
-  const { userId, lessonId } = await c.req.json();
+  const { userId, lessonId, completed } = await c.req.json();
   
-  await db.insert(schema.progress).values({
-    userId,
-    lessonId,
-    completed: true
-  });
+  // Buscar si ya existe el registro
+  const existing = await db.select()
+    .from(schema.progress)
+    .where(
+      and(
+        eq(schema.progress.userId, Number(userId)),
+        eq(schema.progress.lessonId, Number(lessonId))
+      )
+    );
 
-  return c.json({ success: true, message: '¡Progreso de Godot guardado!' });
+  if (existing.length > 0) {
+    // Si ya existe y queremos marcarlo como no completado, lo borramos o actualizamos
+    if (completed === false) {
+      await db.delete(schema.progress)
+        .where(
+          and(
+            eq(schema.progress.userId, Number(userId)),
+            eq(schema.progress.lessonId, Number(lessonId))
+          )
+        );
+      return c.json({ success: true, message: 'Lección desmarcada' });
+    } else {
+      // Si ya existe y queremos marcarlo como completado, lo dejamos así (o actualizamos fecha)
+      return c.json({ success: true, message: 'La lección ya estaba completada' });
+    }
+  } else if (completed !== false) {
+    // Si no existe y queremos marcarlo como completado (o no se especifica completed)
+    await db.insert(schema.progress).values({
+      userId: Number(userId),
+      lessonId: Number(lessonId),
+      completed: true
+    });
+    return c.json({ success: true, message: '¡Lección completada!' });
+  }
+
+  return c.json({ success: true, message: 'Sin cambios' });
 });
 
 // --- CRUD DE LECCIONES ---

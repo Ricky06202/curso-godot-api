@@ -38,8 +38,3 @@ export const resources = mysqlTable('resources', {
   title: varchar('title', { length: 255 }).notNull(),
   url: varchar('url', { length: 255 }).notNull(),
 });
-
-export const config = mysqlTable('config', {
-  key: varchar('key', { length: 50 }).primaryKey(),
-  value: text('value').notNull(),
-});
