@@ -26,16 +26,10 @@ export const progress = mysqlTable('progress', {
   completedAt: timestamp('completed_at').defaultNow(),
 });
 
-export const lessonCodes = mysqlTable('lesson_codes', {
-  id: int('id').autoincrement().primaryKey(),
-  lessonId: int('lesson_id').notNull(),
-  title: varchar('title', { length: 255 }).notNull(),
-  code: text('code').notNull(),
-});
-
 export const resources = mysqlTable('resources', {
   id: int('id').autoincrement().primaryKey(),
   lessonId: int('lesson_id').notNull(),
   title: varchar('title', { length: 255 }).notNull(),
   description: text('description').notNull(),
+  type: varchar('type', { length: 50 }).default('code'), // 'code', 'file', etc.
 });
