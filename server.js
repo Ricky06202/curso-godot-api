@@ -279,17 +279,19 @@ app.get('/api/course/:userId', async (c) => {
     .from(schema.progress)
     .where(eq(schema.progress.userId, Number(userId)));
 
-  // Obtener todos los códigos de lecciones
+  // Obtener todos los códigos y recursos de lecciones
   const allCodes = await db.select().from(schema.lessonCodes);
+  const allResources = await db.select().from(schema.resources);
 
-  // Mapear lecciones para incluir sus códigos
-  const lessonsWithCodes = allLessons.map(lesson => ({
+  // Mapear lecciones para incluir sus códigos y recursos
+  const lessonsWithExtras = allLessons.map(lesson => ({
     ...lesson,
-    codes: allCodes.filter(code => code.lessonId === lesson.id)
+    codes: allCodes.filter(code => code.lessonId === lesson.id),
+    resources: allResources.filter(res => res.lessonId === lesson.id)
   }));
 
   return c.json({
-    lessons: lessonsWithCodes,
+    lessons: lessonsWithExtras,
     progress: userProgress
   });
 });
@@ -444,12 +446,12 @@ app.get('/api/lessons/:id/resources', async (c) => {
 // Agregar recurso a una lección
 app.post('/api/lessons/:id/resources', async (c) => {
   const lessonId = Number(c.req.param('id'));
-  const { title, url } = await c.req.json();
+  const { title, description } = await c.req.json();
   
   const [result] = await db.insert(schema.resources).values({
     lessonId,
     title,
-    url
+    description
   });
 
   return c.json({ success: true, id: result.insertId }, 201);

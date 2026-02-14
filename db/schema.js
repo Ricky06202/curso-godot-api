@@ -37,5 +37,5 @@ export const resources = mysqlTable('resources', {
   id: int('id').autoincrement().primaryKey(),
   lessonId: int('lesson_id').notNull(),
   title: varchar('title', { length: 255 }).notNull(),
-  url: varchar('url', { length: 255 }).notNull(),
+  description: text('description').notNull(),
 });
